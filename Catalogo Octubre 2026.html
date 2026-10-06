@@ -60,6 +60,7 @@ h2{font:400 clamp(2.4rem,5vw,3.6rem)/1 Italiana,Georgia,serif;margin:0}
 .row b{font-size:1.3rem;font-weight:800}
 .add{border:0;border-radius:99px;background:var(--pink);color:var(--on-pink);font-weight:700;font-size:.85rem;padding:.5rem .9rem}
 .add:hover{background:var(--pink-d);color:#fff}.add.on{background:var(--ink);color:var(--paper)}
+.sold .ph img{filter:grayscale(1);opacity:.45}.sold .info{opacity:.75}.so{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-8deg);background:var(--sun);color:#2b1b17;font-weight:800;font-size:1rem;letter-spacing:.04em;text-transform:uppercase;padding:.4rem 1.1rem;border-radius:99px;box-shadow:0 2px 10px rgba(0,0,0,.25)}.sold .row b{color:var(--muted);font-size:1.05rem}
 .empty{grid-column:1/-1;text-align:center;padding:2rem;color:var(--muted)}
 .cta-sec{text-align:center;color:var(--ink)}
 .cta-sec h2{margin-bottom:.6rem;color:var(--ink)}.cta-sec p{max-width:46ch;margin:0 auto 1.5rem;color:var(--ink)}
@@ -127,8 +128,9 @@ const IT={};
 SC.forEach((a,i)=>{const id='s'+p2(i+1);IT[id]={sec:'S',num:p2(i+1),name:a[0]+' · '+a[1],detail:'Talla '+a[2],price:a[3],single:1,type:a[0],size:a[2],pre:'Scrubs'}});
 for(let n=1;n<=33;n++){const id='g'+p2(n);IT[id]={sec:'G',num:p2(n),name:'Gorro '+p2(n),detail:PL[n]?'Liso · '+PL[n]:'Estampado',price:149,liso:!!PL[n],pre:'Gorro quirúrgico'}}
 AC.forEach((a,i)=>{const id='a'+p2(i+1);IT[id]={sec:'A',num:p2(i+1),name:a[0],detail:a[1],price:a[2],pre:'Accesorio'}});
+const SOLD=new Set(['s06','s07','s08','s12','s13','s18','s25','a11','a12']);
 const money=n=>'$'+n.toLocaleString('es-MX');
-const card=k=>{const t=IT[k];return `<article class="card"><button class="ph" data-zoom="${k}" aria-label="Ampliar ${t.name}"><img src="${IMG[k]}" alt="${t.name}${t.detail?', '+t.detail:''}" loading="lazy"><span class="num">${t.num}</span></button><div class="info"><h3>${t.name}</h3><p>${t.detail||'&nbsp;'}</p><div class="row"><b>${money(t.price)}</b></div></div></article>`};
+const card=k=>{const t=IT[k];return `<article class="card${SOLD.has(k)?' sold':''}"><button class="ph" data-zoom="${k}" aria-label="Ampliar ${t.name}"><img src="${IMG[k]}" alt="${t.name}${t.detail?', '+t.detail:''}" loading="lazy"><span class="num">${t.num}</span>${SOLD.has(k)?'<span class="so">Agotado</span>':''}</button><div class="info"><h3>${t.name}</h3><p>${t.detail||'&nbsp;'}</p><div class="row"><b>${SOLD.has(k)?'Agotado':money(t.price)}</b></div></div></article>`};
 const keys=s=>Object.keys(IT).filter(k=>IT[k].sec===s);
 const F={tipo:'Todo',talla:'Todas',gor:'Todos'};
 function chips(el,label,opts,key,draw){const box=$(el);box.innerHTML=`<small>${label}</small>`+opts.map(o=>`<button class="chip" aria-pressed="${F[key]===o}">${o}</button>`).join('');box.onclick=e=>{const b=e.target.closest('.chip');if(!b)return;F[key]=b.textContent;$$(el+' .chip').forEach(c=>c.setAttribute('aria-pressed',c===b));draw()}}
@@ -137,7 +139,7 @@ function drawG(){const l=keys('G').filter(k=>F.gor==='Todos'||(F.gor==='Lisos')=
 chips('#fTipo','Tipo',['Todo','Filipinas','Pantalones'],'tipo',drawS);chips('#fTalla','Talla',['Todas','XS','S','S Petite','M','L','XL'],'talla',drawS);chips('#fGor','Estilo',['Todos','Estampados','Lisos'],'gor',drawG);
 F.gor='Todos';$$('#fGor .chip')[0].setAttribute('aria-pressed',true);
 let zk=null;const lb=$('#lb');
-document.addEventListener('click',e=>{let b;if(b=e.target.closest('[data-zoom]')){zk=b.dataset.zoom;$('#lbi').src=IMG[zk];$('#lbi').alt=IT[zk].name;$('#lbn').textContent=`${IT[zk].name} · ${money(IT[zk].price)}`;$('#lbd').textContent=IT[zk].detail||IT[zk].pre;lb.showModal()}else if(e.target===lb)lb.close()});
+document.addEventListener('click',e=>{let b;if(b=e.target.closest('[data-zoom]')){zk=b.dataset.zoom;$('#lbi').src=IMG[zk];$('#lbi').alt=IT[zk].name;$('#lbn').textContent=`${IT[zk].name} · ${SOLD.has(zk)?'Agotado':money(IT[zk].price)}`;$('#lbd').textContent=IT[zk].detail||IT[zk].pre;lb.showModal()}else if(e.target===lb)lb.close()});
 $('#waMain').href=`https://wa.me/${WA}?text=${encodeURIComponent('Hola D\'Care Baja, vi su catálogo y quiero más información.')}`;
 const ls=$$('#links a'),io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)ls.forEach(a=>a.classList.toggle('on',a.hash==='#'+e.target.id))}),{rootMargin:'-45% 0px -50% 0px'});
 $$('section.sec').forEach(s=>io.observe(s));
