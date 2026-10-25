@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de Planificación de CPU</title>
+<style>
+  :root{--fondo:#eef1f4;--panel:#fff;--tinta:#16222d;--suave:#5b6b7a;--linea:#d3dae1;--acento:#0e6f78;--error:#b3261e}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px 16px 48px;background:var(--fondo);color:var(--tinta);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  main{max-width:1000px;margin:auto;display:grid;gap:18px}
+  h1{margin:0;font-size:1.7rem;letter-spacing:-.02em}
+  h2{margin:0 0 12px;font-size:1.05rem}
+  .sub{color:var(--suave);margin:4px 0 0}
+  section{background:var(--panel);border:1px solid var(--linea);border-radius:10px;padding:18px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--linea)}
+  th{font-weight:600;color:var(--suave);font-size:.85rem}
+  input,select{font:inherit;padding:6px 8px;border:1px solid var(--linea);border-radius:6px;background:#fff;color:inherit}
+  td input{width:90px;text-align:center}
+  input:disabled{background:#eceff2;color:#9aa6b1}
+  button{font:inherit;padding:7px 14px;border-radius:6px;border:1px solid var(--linea);background:#fff;cursor:pointer}
+  button:hover{border-color:var(--acento)}
+  button.principal{background:var(--acento);color:#fff;border-color:var(--acento);font-weight:600}
+  :focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+  .barra{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}
+  .barra label{display:grid;gap:3px;font-size:.85rem;color:var(--suave)}
+  .nota{font-size:.85rem;color:var(--suave);margin:8px 0 0}
+  #errores{color:var(--error);margin:10px 0 0;white-space:pre-line}
+  /* Gantt */
+  .gantt{display:flex;overflow-x:auto;padding:38px 8px 42px}
+  .bloque{position:relative;height:56px;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.05rem;border-right:2px solid var(--panel)}
+  .bloque small{font-weight:400;font-size:.72rem;opacity:.85}
+  .bloque.idle{background:repeating-linear-gradient(45deg,#c5ccd3,#c5ccd3 6px,#dde2e7 6px,#dde2e7 12px);color:#4a5661}
+  .bloque.cs::before{content:"";position:absolute;left:-3px;top:-10px;bottom:-10px;width:4px;background:var(--error);z-index:2}
+  .cambio{position:absolute;left:0;top:-36px;transform:translateX(-50%);background:var(--error);color:#fff;font-size:.72rem;font-weight:600;padding:1px 7px;border-radius:10px;white-space:nowrap;z-index:3}
+  .t{position:absolute;left:0;top:62px;font-size:.8rem;font-weight:400;color:var(--tinta);transform:translateX(-50%);white-space:nowrap}
+  .t.fin{left:auto;right:0;transform:translateX(50%)}
+  .leyenda{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid var(--linea);border-radius:20px;font-size:.85rem}
+  .chip i{width:12px;height:12px;border-radius:3px;display:inline-block}
+  /* Carriles por proceso */
+  .carriles{overflow-x:auto;padding-bottom:6px}
+  .carril{display:flex;align-items:center;margin:4px 0;width:max-content}
+  .nom{position:sticky;left:0;width:44px;background:var(--panel);z-index:3}
+  .pista{position:relative;height:26px;background:repeating-linear-gradient(90deg,transparent 0 29px,#e4e9ee 29px 30px);border-radius:4px}
+  .espera{position:absolute;top:8px;height:10px;background:repeating-linear-gradient(45deg,#cfd6dd,#cfd6dd 4px,#eef1f4 4px,#eef1f4 8px)}
+  .run{position:absolute;top:0;height:26px;border-right:2px solid var(--panel);border-radius:3px}
+  .regla{position:relative;height:18px}
+  .regla span{position:absolute;font-size:.72rem;transform:translateX(-50%);color:var(--suave)}
+  /* Fórmulas */
+  .formulas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:14px}
+  .formulas div{background:var(--fondo);border-radius:8px;padding:10px 12px;font:.9rem ui-monospace,Consolas,monospace}
+  .calc{font:.88rem ui-monospace,Consolas,monospace;margin:4px 0}
+  .tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+  .tarjeta{border:1px solid var(--linea);border-radius:8px;padding:12px}
+  .tarjeta b{display:block;font-size:1.5rem;color:var(--acento)}
+  .tarjeta span{font-size:.82rem;color:var(--suave)}
+  #resultados{display:grid;gap:18px}
+  .oculto{display:none !important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Simulador de Planificación de CPU</h1>
+    <p class="sub">FCFS, SJF, SRTF, Round Robin y Prioridades. Los resultados se calculan por simulación de eventos discretos.</p>
+  </header>
+
+  <section>
+    <h2>1. Procesos y configuración</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Llegada (AT ≥ 0)</th><th>Ráfaga (BT &gt; 0)</th><th>Prioridad (menor = mayor prioridad)</th><th></th></tr></thead>
+      <tbody id="tbodyEntrada"></tbody>
+    </table>
+    <div class="barra">
+      <button id="btnAgregar">Agregar proceso</button>
+      <button id="btnPrueba">Cargar datos de prueba</button>
+      <button id="btnLimpiar">Vaciar tabla</button>
+    </div>
+    <div class="barra">
+      <label>Algoritmo
+        <select id="algoritmo">
+          <option value="FCFS">FCFS / FIFO</option>
+          <option value="SJF">SJF (no apropiativo)</option>
+          <option value="SRTF">SRTF (apropiativo)</option>
+          <option value="RR">Round Robin</option>
+          <option value="PRIO">Prioridades</option>
+        </select>
+      </label>
+      <label id="lblModo" class="oculto">Modo de prioridades
+        <select id="modoPrio"><option value="NP">No apropiativa</option><option value="P">Apropiativa</option></select>
+      </label>
+      <label>Quantum (Q)
+        <input id="quantum" type="number" min="1" step="1" value="3" disabled>
+      </label>
+      <button id="btnSimular" class="principal">Simular</button>
+    </div>
+    <p class="nota">Prioridad: un número menor indica mayor prioridad. Empates: se resuelven por orden de llegada (FIFO) y luego por orden en la tabla.</p>
+    <div id="errores" role="alert"></div>
+  </section>
+
+  <div id="resultados" class="oculto">
+    <section><h2>A) Diagrama de Gantt</h2>
+      <div id="leyenda" class="leyenda"></div>
+      <div id="gantt" class="gantt"></div>
+      <p class="nota">Debajo de cada bloque: instante de inicio (el último número es el fin). Línea y etiqueta roja: cambio de contexto (P<sub>a</sub> → P<sub>b</sub>). Dentro del bloque: unidades de CPU consecutivas.</p></section>
+    <section><h2>Vista por proceso</h2>
+      <div id="carriles" class="carriles"></div>
+      <p class="nota">Cada fila es un proceso: color = usando la CPU, rayado gris = esperando en cola listos (entre su llegada y su CT).</p></section>
+    <section><h2>B) Tabla de resultados</h2>
+      <table><thead><tr><th>Proceso</th><th>AT</th><th>BT</th><th>Prioridad</th><th>CT</th><th>TAT</th><th>WT</th><th>RT</th></tr></thead>
+      <tbody id="tbodyResultados"></tbody></table>
+      <p class="nota">TAT = CT − AT · WT = TAT − BT · RT = primera atención de CPU − AT</p></section>
+    <section><h2>C) Métricas del sistema</h2><div id="metricas" class="tarjetas"></div></section>
+    <section><h2>Fórmulas y cálculo paso a paso</h2><div id="formulas"></div></section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. ESTADO Y UTILIDADES
+   ============================================================ */
+let procesos = [];   // Lista editable: {id, at, bt, pr}
+let contadorId = 0;  // Para generar P1, P2, P3...
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const redondear = (n, d = 2) => Number.isFinite(n) ? +n.toFixed(d) : 0;
+
+/** Color distintivo y estable por índice de proceso (reparte los tonos con el ángulo áureo). */
+const colorProceso = (i) => `hsl(${(i * 137.508) % 360} 55% 38%)`;
+
+function agregarProceso(at = 0, bt = 1, pr = 1) {
+  contadorId++;
+  procesos.push({ id: "P" + contadorId, at, bt, pr });
+}
+
+/* ============================================================
+   2. TABLA DE ENTRADA (agregar / editar / eliminar)
+   ============================================================ */
+function dibujarEntrada() {
+  const tb = $("tbodyEntrada");
+  tb.innerHTML = "";
+  procesos.forEach((p, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input value="${esc(p.id)}" data-i="${i}" data-c="id" aria-label="ID"></td>
+      <td><input type="number" min="0" step="1" value="${p.at}" data-i="${i}" data-c="at" aria-label="Llegada"></td>
+      <td><input type="number" min="1" step="1" value="${p.bt}" data-i="${i}" data-c="bt" aria-label="Ráfaga"></td>
+      <td><input type="number" step="1" value="${p.pr}" data-i="${i}" data-c="pr" aria-label="Prioridad"></td>
+      <td><button data-del="${i}" aria-label="Eliminar ${esc(p.id)}">Eliminar</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// Edición en línea: actualiza el arreglo sin redibujar (no pierde el foco)
+$("tbodyEntrada").addEventListener("input", (e) => {
+  const { i, c } = e.target.dataset;
+  if (i === undefined) return;
+  procesos[i][c] = c === "id" ? e.target.value.trim() : e.target.value; // se valida al simular
+});
+$("tbodyEntrada").addEventListener("click", (e) => {
+  if (e.target.dataset.del === undefined) return;
+  procesos.splice(+e.target.dataset.del, 1);
+  dibujarEntrada();
+});
+
+$("btnAgregar").onclick = () => { agregarProceso(); dibujarEntrada(); };
+$("btnLimpiar").onclick = () => { procesos = []; contadorId = 0; dibujarEntrada(); };
+$("btnPrueba").onclick = () => {
+  procesos = []; contadorId = 0;
+  // Incluye un hueco de CPU inactiva (P5 llega en t=30)
+  [[0, 8, 3], [1, 4, 1], [2, 9, 4], [3, 5, 2], [30, 3, 1]].forEach(d => agregarProceso(...d));
+  dibujarEntrada();
+};
+
+// Habilita Q solo en Round Robin y el modo solo en Prioridades
+$("algoritmo").onchange = () => {
+  const a = $("algoritmo").value;
+  $("quantum").disabled = a !== "RR";
+  $("lblModo").classList.toggle("oculto", a !== "PRIO");
+};
+
+/* ============================================================
+   3. VALIDACIÓN
+   ============================================================ */
+/** Devuelve {lista, errores}. lista contiene números ya convertidos. */
+function validar() {
+  const errores = [], ids = new Set(), lista = [];
+  if (!procesos.length) errores.push("Agrega al menos un proceso.");
+  procesos.forEach((p, i) => {
+    const f = i + 1, at = Number(p.at), bt = Number(p.bt), pr = Number(p.pr);
+    if (!p.id) errores.push(`Fila ${f}: el ID no puede estar vacío.`);
+    else if (ids.has(p.id)) errores.push(`Fila ${f}: el ID "${p.id}" está repetido.`);
+    ids.add(p.id);
+    if (!Number.isInteger(at) || at < 0 || String(p.at).trim() === "") errores.push(`Fila ${f}: AT debe ser un entero ≥ 0.`);
+    if (!Number.isInteger(bt) || bt <= 0) errores.push(`Fila ${f}: BT debe ser un entero > 0.`);
+    if (!Number.isInteger(pr) || String(p.pr).trim() === "") errores.push(`Fila ${f}: la prioridad debe ser un entero.`);
+    lista.push({ id: p.id, at, bt, pr });
+  });
+  if ($("algoritmo").value === "RR") {
+    const q = Number($("quantum").value);
+    if (!Number.isInteger(q) || q < 1) errores.push("El Quantum debe ser un entero ≥ 1.");
+  }
+  return { lista, errores };
+}
+
+/* ============================================================
+   4. MOTOR DE PLANIFICACIÓN
+   Cada simulador devuelve { segmentos, P }:
+     segmentos: [{pid|null, ini, fin}]  (pid null = CPU inactiva)
+     P: procesos con inicio (primera atención) y ct (finalización)
+   ============================================================ */
+
+/** Agrega un segmento al Gantt; si continúa el mismo proceso sin hueco, lo fusiona. */
+function agregarSegmento(segs, pid, ini, fin) {
+  const ult = segs[segs.length - 1];
+  if (ult && ult.pid === pid && ult.fin === ini) ult.fin = fin;
+  else segs.push({ pid, ini, fin });
+}
+
+/** Copia de trabajo de los procesos con campos de simulación. */
+const preparar = (lista) => lista.map((p, i) => ({ ...p, i, rem: p.bt, inicio: null, ct: null }));
+
+/**
+ * FCFS, SJF, SRTF y Prioridades (ambas variantes).
+ * Cada algoritmo se reduce a una "clave" de comparación (menor = gana).
+ * Todas terminan con [llegada, índice] para desempatar por FIFO.
+ */
+function simularPorClave(lista, algoritmo, modoPrio) {
+  const P = preparar(lista), segs = [];
+  const clave = {
+    FCFS: p => [p.at, p.i],
+    SJF:  p => [p.bt, p.at, p.i],        // ráfaga total
+    SRTF: p => [p.rem, p.at, p.i],       // tiempo restante
+    PRIO: p => [p.pr, p.at, p.i],        // menor número = mayor prioridad
+  }[algoritmo];
+  const gana = (a, b) => {               // ¿a tiene mejor clave que b?
+    const ka = clave(a), kb = clave(b);
+    for (let k = 0; k < ka.length; k++) if (ka[k] !== kb[k]) return ka[k] < kb[k];
+    return false;
+  };
+  const apropiativo = algoritmo === "SRTF" || (algoritmo === "PRIO" && modoPrio === "P");
+
+  let t = 0, terminados = 0, actual = null;
+  while (terminados < P.length) {
+    // Se elige proceso si la CPU está libre, o en cada unidad de tiempo si es apropiativo
+    if (!actual || apropiativo) {
+      const listos = P.filter(p => p.at <= t && p.rem > 0);
+      if (!listos.length) {
+        // Cola vacía y faltan arribos: bloque Idle hasta el próximo arribo
+        const prox = Math.min(...P.filter(p => p.rem > 0).map(p => p.at));
+        agregarSegmento(segs, null, t, prox);
+        t = prox; actual = null;
+        continue;
+      }
+      actual = listos.reduce((a, b) => gana(b, a) ? b : a);
+    }
+    if (actual.inicio === null) actual.inicio = t;     // primera atención (para RT)
+    const dur = apropiativo ? 1 : actual.rem;          // apropiativo: avanza 1 unidad y reevalúa
+    agregarSegmento(segs, actual.id, t, t + dur);
+    actual.rem -= dur; t += dur;
+    if (actual.rem === 0) { actual.ct = t; terminados++; actual = null; }
+  }
+  return { segmentos: segs, P };
+}
+
+/**
+ * Round Robin con cola FIFO explícita.
+ * Regla crítica: los procesos que llegan hasta el instante t INCLUSIVE
+ * entran a la cola ANTES de reinsertar al proceso que agotó su Quantum.
+ */
+function simularRR(lista, q) {
+  const P = preparar(lista), segs = [];
+  const porLlegada = [...P].sort((a, b) => a.at - b.at || a.i - b.i);
+  const cola = [];
+  let t = 0, sig = 0, terminados = 0;
+
+  const admitirLlegadas = () => {
+    while (sig < porLlegada.length && porLlegada[sig].at <= t) cola.push(porLlegada[sig++]);
+  };
+
+  while (terminados < P.length) {
+    admitirLlegadas();
+    if (!cola.length) {                      // CPU inactiva hasta el próximo arribo
+      const prox = porLlegada[sig].at;
+      agregarSegmento(segs, null, t, prox);
+      t = prox;
+      continue;
+    }
+    const p = cola.shift();
+    if (p.inicio === null) p.inicio = t;
+    const dur = Math.min(q, p.rem);
+    agregarSegmento(segs, p.id, t, t + dur);
+    t += dur; p.rem -= dur;
+    admitirLlegadas();                       // 1º: los que llegan en [.., t]
+    if (p.rem > 0) cola.push(p);             // 2º: se reinserta el que agotó su Quantum
+    else { p.ct = t; terminados++; }
+  }
+  return { segmentos: segs, P };
+}
+
+/* ============================================================
+   5. MÉTRICAS
+   ============================================================ */
+function calcularResultados(P, segs) {
+  const filas = P.map(p => {
+    const tat = p.ct - p.at;
+    return { id: p.id, i: p.i, at: p.at, bt: p.bt, pr: p.pr, ct: p.ct, tat, wt: tat - p.bt, rt: p.inicio - p.at, ini: p.inicio };
+  });
+  const n = filas.length;
+  const total = segs[segs.length - 1].fin;                      // tiempo total desde t = 0
+  const activo = segs.filter(s => s.pid !== null).reduce((a, s) => a + (s.fin - s.ini), 0);
+  // Cambio de contexto: paso directo de un proceso a otro DISTINTO (idle no cuenta)
+  let cambios = 0;
+  for (let k = 1; k < segs.length; k++)
+    if (segs[k].pid !== null && segs[k - 1].pid !== null) cambios++;
+  const prom = (campo) => filas.reduce((a, f) => a + f[campo], 0) / n;
+  return {
+    filas, cambios,
+    wtProm: prom("wt"), tatProm: prom("tat"),
+    throughput: n / total, uso: activo / total * 100, total, activo
+  };
+}
+
+/* ============================================================
+   6. RENDERIZADO DE RESULTADOS
+   ============================================================ */
+/** Leyenda: un color por proceso + Idle. */
+function dibujarLeyenda(P) {
+  $("leyenda").innerHTML = P.map(p =>
+    `<span class="chip"><i style="background:${colorProceso(p.i)}"></i>${esc(p.id)}</span>`).join("") +
+    `<span class="chip"><i style="background:#c5ccd3"></i>Idle</span>`;
+}
+
+/** Gantt principal: bloques con etiqueta de cambio de contexto "Pa → Pb" en rojo. */
+function dibujarGantt(segs, indices) {
+  const g = $("gantt"), PX = 34;
+  g.innerHTML = "";
+  segs.forEach((s, k) => {
+    const dur = s.fin - s.ini, idle = s.pid === null;
+    // Cambio de contexto = viene directamente de otro proceso (no de Idle)
+    const cs = k > 0 && !idle && segs[k - 1].pid !== null;
+    const d = document.createElement("div");
+    d.className = "bloque" + (idle ? " idle" : "") + (cs ? " cs" : "");
+    d.style.width = Math.max(dur * PX, 56) + "px";
+    if (!idle) d.style.background = colorProceso(indices[s.pid]);
+    d.title = `${s.pid ?? "Idle"}: [${s.ini}, ${s.fin})`;
+    d.innerHTML = `${idle ? "Idle" : esc(s.pid)}<small>${dur} u</small>` +
+      (cs ? `<span class="cambio">${esc(segs[k - 1].pid)} → ${esc(s.pid)}</span>` : "") +
+      `<span class="t">${s.ini}</span>` +
+      (k === segs.length - 1 ? `<span class="t fin">${s.fin}</span>` : "");
+    g.appendChild(d);
+  });
+}
+
+/** Un carril por proceso, a escala de tiempo: color = ejecutando, rayado = esperando. */
+function dibujarCarriles(sim, total) {
+  const PX = 30, W = total * PX, paso = total > 60 ? 5 : 1;
+  let regla = "";
+  for (let t = 0; t <= total; t += paso) regla += `<span style="left:${t * PX}px">${t}</span>`;
+  const filas = sim.P.map(p => {
+    const barras = sim.segmentos.filter(s => s.pid === p.id).map(s =>
+      `<i class="run" style="left:${s.ini * PX}px;width:${(s.fin - s.ini) * PX}px;background:${colorProceso(p.i)}"></i>`).join("");
+    return `<div class="carril"><b class="nom" style="color:${colorProceso(p.i)}">${esc(p.id)}</b>` +
+      `<div class="pista" style="width:${W}px"><i class="espera" style="left:${p.at * PX}px;width:${(p.ct - p.at) * PX}px"></i>${barras}</div></div>`;
+  }).join("");
+  $("carriles").innerHTML = `<div class="carril"><b class="nom"></b><div class="regla" style="width:${W}px">${regla}</div></div>` + filas;
+}
+
+function dibujarResultados(r) {
+  $("tbodyResultados").innerHTML = r.filas.map(f =>
+    `<tr><td><b style="color:${colorProceso(f.i)}">${esc(f.id)}</b></td><td>${f.at}</td><td>${f.bt}</td><td>${f.pr}</td><td>${f.ct}</td><td>${f.tat}</td><td>${f.wt}</td><td>${f.rt}</td></tr>`
+  ).join("");
+  const tarjeta = (v, et) => `<div class="tarjeta"><b>${v}</b><span>${et}</span></div>`;
+  $("metricas").innerHTML =
+    tarjeta(redondear(r.wtProm), "Tiempo promedio de espera (WT̄)") +
+    tarjeta(redondear(r.tatProm), "Tiempo promedio de retorno (TAT̄)") +
+    tarjeta(redondear(r.throughput, 4), `Throughput (procesos / unidad; ${r.filas.length} en ${r.total})`) +
+    tarjeta(redondear(r.uso) + " %", "Uso de CPU") +
+    tarjeta(r.cambios, "Cambios de contexto");
+}
+
+/** Fórmulas y sustitución de valores reales proceso por proceso. */
+function dibujarFormulas(r) {
+  const n = r.filas.length, suma = (c) => r.filas.map(f => f[c]).join(" + ");
+  const filas = r.filas.map(f =>
+    `<tr><td><b style="color:${colorProceso(f.i)}">${esc(f.id)}</b></td><td>${f.ct}</td>` +
+    `<td>${f.ct} − ${f.at} = <b>${f.tat}</b></td><td>${f.tat} − ${f.bt} = <b>${f.wt}</b></td>` +
+    `<td>${f.ini} − ${f.at} = <b>${f.rt}</b></td></tr>`).join("");
+  $("formulas").innerHTML = `
+    <div class="formulas">
+      <div>CT = instante en que termina su último bloque</div>
+      <div>TAT = CT − AT</div>
+      <div>WT = TAT − BT</div>
+      <div>RT = primera atención − AT</div>
+    </div>
+    <table><thead><tr><th>Proceso</th><th>CT (del Gantt)</th><th>TAT = CT − AT</th><th>WT = TAT − BT</th><th>RT = inicio − AT</th></tr></thead><tbody>${filas}</tbody></table>
+    <p class="calc">WT̄ = (${suma("wt")}) / ${n} = ${redondear(r.wtProm)}</p>
+    <p class="calc">TAT̄ = (${suma("tat")}) / ${n} = ${redondear(r.tatProm)}</p>
+    <p class="calc">Throughput = ${n} / ${r.total} = ${redondear(r.throughput, 4)}</p>
+    <p class="calc">Uso de CPU = ${r.activo} / ${r.total} × 100 = ${redondear(r.uso)} %</p>`;
+}
+
+/* ============================================================
+   7. CONTROLADOR
+   ============================================================ */
+$("btnSimular").onclick = () => {
+  const { lista, errores } = validar();
+  $("errores").textContent = errores.join("\n");
+  if (errores.length) { $("resultados").classList.add("oculto"); return; }
+
+  const algoritmo = $("algoritmo").value;
+  const sim = algoritmo === "RR"
+    ? simularRR(lista, Number($("quantum").value))
+    : simularPorClave(lista, algoritmo, $("modoPrio").value);
+
+  const indices = Object.fromEntries(sim.P.map(p => [p.id, p.i]));
+  const r = calcularResultados(sim.P, sim.segmentos);
+  dibujarLeyenda(sim.P);
+  dibujarGantt(sim.segmentos, indices);
+  dibujarCarriles(sim, r.total);
+  dibujarResultados(r);
+  dibujarFormulas(r);
+  $("resultados").classList.remove("oculto");
+};
+
+// Arranque: carga los datos de prueba
+$("btnPrueba").click();
+</script>
+</body>
+</html>
